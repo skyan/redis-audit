@@ -74,21 +74,22 @@ class RedisAudit
   # Configure regular expressions here if you need to guarantee that certain keys are grouped together
   @@key_group_regex_list = []
   
-  def initialize(redis, sample_size)
-    @redis = redis
+  def initialize(sample_size)
     @keys = Hash.new
     @sample_size = sample_size
     @dbsize = 0
   end
   
-  def audit_keys
-    @dbsize = @redis.dbsize.to_i
-    
+  def audit_keys(redis)
+    @redis = redis
+    dbsize = @redis.dbsize.to_i
+    @dbsize = @dbsize + dbsize
+
     if @sample_size == 0
-      @sample_size = (0.1 * @dbsize).to_i
+      @sample_size = (0.1 * dbsize).to_i
     end
     
-    if @sample_size < @dbsize
+    if @sample_size < dbsize
       puts "Sampling #{@sample_size} keys..."
       sample_progress = @sample_size/10
     
@@ -100,15 +101,15 @@ class RedisAudit
         end
       end
     else
-      sample_progress = @dbsize/10
+      sample_progress = dbsize/10
       
-      puts "Getting a list of all #{@dbsize} keys..."
+      puts "Getting a list of all #{dbsize} keys..."
       keys = @redis.keys("*")
-      puts "Auditing #{@dbsize} keys..."
+      puts "Auditing #{dbsize} keys..."
       keys.each_with_index do |key, index|
         audit_key(key)
         if sample_progress > 0 && (index + 1) % sample_progress == 0
-          puts "#{index + 1} keys sampled - #{(((index + 1)/@dbsize.to_f) * 100).round}% complete - #{Time.now}"
+          puts "#{index + 1} keys sampled - #{(((index + 1)/dbsize.to_f) * 100).round}% complete - #{Time.now}"
         end
       end
     end
@@ -203,7 +204,7 @@ class RedisAudit
     complete_serialized_length = @keys.map {|key, value| value.total_serialized_length }.reduce(:+)
     sorted_keys = @keys.keys.sort{|a,b| @keys[a].total_serialized_length <=> @keys[b].total_serialized_length}
     
-    puts "DB has #{@dbsize} keys"
+    puts "All DB has #{@dbsize} keys"
     puts "Sampled #{output_bytes(complete_serialized_length)} of Redis memory"
     puts
     puts "Found #{@keys.count} key groups"
@@ -261,18 +262,24 @@ class RedisAudit
   end
 end
 
-if ARGV.length < 3 || ARGV.length > 4
-    puts "Usage: redis-audit.rb <host> <port> <dbnum> <(optional)sample_size>"
+if ARGV.length < 2 || ARGV.length > 3
+    puts "Usage: redis-audit.rb <host1:port;host2:port> <dbnum> <(optional)sample_size>"
     exit 1
 end
 
-host = ARGV[0]
-port = ARGV[1].to_i
-db = ARGV[2].to_i
-sample_size = ARGV[3].to_i
+hosts = ARGV[0].split(';')
 
-redis = Redis.new(:host => host, :port => port, :db => db)
-auditor = RedisAudit.new(redis, sample_size)
-puts "Auditing #{host}:#{port} db:#{db} sampling #{sample_size} keys"
-auditor.audit_keys
+db = ARGV[1].to_i
+sample_size = ARGV[2].to_i
+
+auditor = RedisAudit.new(sample_size)
+
+hosts.each do |h|
+    host = h.split(':')[0]
+    port = h.split(':')[1].to_i
+    redis = Redis.new(:host => host, :port => port, :db => db)
+    puts "Auditing #{host}:#{port} db:#{db} sampling #{sample_size} keys"
+    auditor.audit_keys(redis)
+end
+
 auditor.output_stats
