@@ -14,12 +14,13 @@ help you work out which group of keys is taking up more memory. It will also hel
 as providing you with statistics on how often keys are accessed within each group.
 
 ##Usage
-    bundle exec ruby redis-audit.rb [host] [port] [dbnum] [(optional)sample_size]
+    bundle exec ruby redis-audit.rb [host_port_list] [dbnum] [(optional)sample_size]
   
-- **Host**: Generally this is 127.0.0.1 (Please note, running it remotely will cause the script to take significantly longer)
-- **Port**: The port to connect to (e.g. 6379)
+- **HostPortList**: The host and port of redis servers. The format is "host1:port1;host2:port2;...;hostn:portn" . 
+You can specify multiple redis hosts and ports as you wish. The script will sample each redis host and summaries keys from all hosts. (Please note, running it remotely will cause the script to take significantly longer)
 - **DBNum**: The Redis to connect to (e.g. 0)
-- **Sample size**: This optional parameter controls how many keys to sample. I recommend starting with 10, then going to 100 initially. This
+- **Sample size**: This optional parameter controls how many keys to sample in each redis host. 
+I recommend starting with 10, then going to 100 initially. This
 will enable you to see that keys are being grouped properly. If you omit this parameter the script samples 10% of your keys. If the sample size is
 greater than the number of keys in the database the script will walk all the keys in the Redis database. **DO NOT** run this with a lot of keys on 
 a production master database. Keys * will block for a long time and cause timeouts!
